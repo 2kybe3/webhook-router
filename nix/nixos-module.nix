@@ -1,5 +1,6 @@
 {
   lib,
+  self,
   pkgs,
   config,
   ...
@@ -15,7 +16,7 @@ in
 
     package = lib.mkOption {
       type = lib.types.package;
-      default = pkgs.webhook-router;
+      default = self.packages.${pkgs.stdenv.hostPlatform.system}.default;
       description = "webhook-router package to use.";
     };
 

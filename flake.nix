@@ -31,7 +31,7 @@
       rust-overlay,
     }:
     let
-      nixosModule = import ./nix/nixos-module.nix;
+      nixosModule = { pkgs, ... }@args: import ./nix/nixos-module.nix (args // { inherit self pkgs; });
     in
     flake-utils.lib.eachDefaultSystem (
       system:
