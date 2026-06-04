@@ -28,7 +28,7 @@ pub struct Input {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Webhook {
-    pub url: String,
+    pub url: Option<String>,
     pub url_file: Option<String>,
     pub formatter: WebhookFormatter,
 }
@@ -83,7 +83,7 @@ impl Config {
             if let Some(url_file) = &webhook.1.url_file {
                 tracing::info!("getting url for input '{}'", webhook.0);
                 let url = fs::read_to_string(PathBuf::from_str(url_file)?)?;
-                webhook.1.url = url.trim().to_string();
+                webhook.1.url = Some(url.trim().to_string());
             }
         }
         Ok(())
@@ -304,7 +304,7 @@ mod tests {
 
     fn test_webhook(name: &str) -> Webhook {
         Webhook {
-            url: format!("https://{name}.example.come"),
+            url: Some(format!("https://{name}.example.come")),
             url_file: None,
             formatter: WebhookFormatter {
                 script: r#"function(data) return { body = "test" end}"#.to_string(),
@@ -314,7 +314,7 @@ mod tests {
 
     fn test_webhook_with_formatter(name: &str, formatter: &str) -> Webhook {
         Webhook {
-            url: format!("https://{name}.example.come"),
+            url: Some(format!("https://{name}.example.come")),
             url_file: None,
             formatter: WebhookFormatter {
                 script: formatter.to_string(),

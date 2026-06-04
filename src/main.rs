@@ -189,7 +189,7 @@ async fn send_webhook(
     body: serde_json::Value,
 ) -> anyhow::Result<reqwest::StatusCode> {
     let response = client
-        .post(&webhook.url)
+        .post(webhook.url.as_ref().unwrap())
         .header("Content-Type", "application/json")
         .header("User-Agent", "webhook-router (by 2kybe3)")
         .json(&body)
