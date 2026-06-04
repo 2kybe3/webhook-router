@@ -29,6 +29,7 @@ pub struct Input {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Webhook {
     pub url: String,
+    pub url_file: Option<String>,
     pub formatter: WebhookFormatter,
 }
 
@@ -75,9 +76,15 @@ impl Config {
     pub fn init(&mut self) -> anyhow::Result<()> {
         for input in &mut self.inputs {
             tracing::info!("getting token for input '{}'", input.0);
-            let file = PathBuf::from_str(&input.1.token_file)?;
-            let token = fs::read_to_string(file)?;
+            let token = fs::read_to_string(PathBuf::from_str(&input.1.token_file)?)?;
             input.1.token = Some(token.trim().to_string());
+        }
+        for webhook in self.webhooks.iter_mut() {
+            if let Some(url_file) = &webhook.1.url_file {
+                tracing::info!("getting url for input '{}'", webhook.0);
+                let url = fs::read_to_string(PathBuf::from_str(url_file)?)?;
+                webhook.1.url = url.trim().to_string();
+            }
         }
         Ok(())
     }
