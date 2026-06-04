@@ -304,6 +304,7 @@ mod tests {
     fn test_webhook(name: &str) -> Webhook {
         Webhook {
             url: format!("https://{name}.example.come"),
+            url_file: None,
             formatter: WebhookFormatter {
                 script: r#"function(data) return { body = "test" end}"#.to_string(),
             },
@@ -313,6 +314,7 @@ mod tests {
     fn test_webhook_with_formatter(name: &str, formatter: &str) -> Webhook {
         Webhook {
             url: format!("https://{name}.example.come"),
+            url_file: None,
             formatter: WebhookFormatter {
                 script: formatter.to_string(),
             },
