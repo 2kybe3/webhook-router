@@ -30,6 +30,9 @@
       treefmt-nix,
       rust-overlay,
     }:
+    let
+      nixosModule = import ./nix/nixos-module.nix;
+    in
     flake-utils.lib.eachDefaultSystem (
       system:
       let
@@ -46,7 +49,6 @@
         treefmt-eval = treefmt-nix.lib.evalModule pkgs ./nix/treefmt.nix;
         webhook-router = pkgs.callPackage ./nix/webhook-router.nix { inherit self crane; };
 
-        nixosModule = import ./nix/nixos-module.nix;
         nixosTest = pkgs.callPackage ./nix/nixos-test.nix { inherit nixosModule; };
       in
       {
@@ -57,14 +59,15 @@
           formatting = treefmt-eval.config.build.check self;
         };
 
-        nixosModules = {
-          default = nixosModule;
-          webhook-router = nixosModule;
-        };
-
         formatter = treefmt-eval.config.build.wrapper;
 
         devShells.default = webhook-router.devShell;
       }
-    );
+    )
+    // {
+      nixosModules = {
+        default = nixosModule;
+        webhook-router = nixosModule;
+      };
+    };
 }
