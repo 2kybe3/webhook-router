@@ -176,6 +176,7 @@ impl Config {
 
         let action_str = match action {
             LuaValue::String(s) => s.to_str().map_err(|e| anyhow!("{e}"))?.to_string(),
+            LuaValue::Nil => "continue".to_string(),
             _ => bail!("rule action must be a string"),
         };
 
