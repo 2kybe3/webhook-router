@@ -83,6 +83,8 @@ async fn webhook_handler(
         );
     }
 
+    tracing::info!("got request: '{body}'");
+
     let targets = match state.config.get_target_webhooks(&query.input, &body) {
         Ok(targets) => targets,
         Err(e) => {
