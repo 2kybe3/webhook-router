@@ -1,0 +1,32 @@
+name: Build & Lint
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  lint-and-build:
+    runs-on: self-hosted
+    container:
+      image: ghcr.io/catthehacker/ubuntu:act-latest@sha256:94b8798401e000215df1d86e925d2dc8e3695a9c5202dbcbb8486040ab8474c1
+
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: https://github.com/cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3 # v31
+
+      - name: Setup Attic
+        id: attic
+        run: |
+          nix profile add "nixpkgs#attic-client"
+          attic login main https://attic.kybe.xyz/main ${{ secrets.ATTIC_KEY }}
+          attic use main
+
+      - name: Build & Checks
+        run: |
+          nix build . --max-jobs 32 -L --no-update-lock-file --accept-flake-config
+          nix flake check . --max-jobs 32 -L --no-update-lock-file --accept-flake-config
+
+      - name: Push to Attic
+        if: ${{ steps.attic.conclusion == 'success' }}
+        run: attic push main --ignore-upstream-cache-filter -j 64 $(ls -d /nix/store/*/)

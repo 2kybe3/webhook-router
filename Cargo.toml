@@ -1,0 +1,24 @@
+[package]
+name = "webhook-router"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+mlua = { version = "0.11.6", features = ["lua55", "serialize", "vendored"] }
+
+tokio = { version = "1.52.3", features = ["full"] }
+tracing-subscriber = "0.3.23"
+tracing = "0.1.44"
+
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+
+clap = { version = "4.6.1", features = ["derive"] }
+
+regex = "1.12.3"
+
+anyhow = "1.0.102"
+toml = "1.1.2"
+
+axum = "0.8.9"
+reqwest = { version = "0.13.4", features = ["json"] }

@@ -1,0 +1,10 @@
+{
+    "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+    "extends": [
+        "2kybe3/renovate-config//base.json",
+        "2kybe3/renovate-config//auto-merge.json"
+    ],
+    "nix": {
+        "enabled": true
+    }
+}
