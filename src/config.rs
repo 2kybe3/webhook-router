@@ -181,7 +181,7 @@ impl Config {
         };
 
         match action_str.as_str() {
-            "block" => Ok(Some(RuleResult::Block)),
+            "block" | "drop" => Ok(Some(RuleResult::Block)),
             "continue" => Ok(Some(RuleResult::Continue)),
             "redirect" => {
                 let targets = result
