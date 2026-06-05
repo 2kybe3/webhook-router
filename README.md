@@ -110,6 +110,10 @@ end
 '''
 ```
 
+### Example Uses
+
+[nix-main](https://git.kybe.xyz/2kybe3/infra-nix-main/src/branch/main/modules/webhook-router.nix) uses webhook-router to filter out renovate issue edit's and redirect renovate embeds into a different discord channel
+
 ### Config Structure
 
 - `webhooks`: List of destination webhooks with name, URL, and formatter
