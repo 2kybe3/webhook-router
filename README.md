@@ -33,7 +33,7 @@ The binary will be available at `target/release/webhook-router`.
 1. Create a configuration file:
 
 ```bash
-cp config.example.toml config.toml
+touch config.toml
 ```
 
 2. Edit `config.toml` (see [Configuration](#configuration) below)
