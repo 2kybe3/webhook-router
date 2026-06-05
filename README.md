@@ -26,6 +26,24 @@ cargo build --release
 
 The binary will be available at `target/release/webhook-router`.
 
+### Also From Source
+
+```bash
+cargo install --git https://git.kybe.xyz/2kybe3/webhook-router
+```
+
+### Nix
+
+```bash
+nix run git+https://git.kybe.xyz/2kybe3/webhook-router
+```
+
+or
+
+```bash
+nix profile install git+https://git.kybe.xyz/2kybe3/webhook-router
+```
+
 ---
 
 ## Quick Start
