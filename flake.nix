@@ -40,9 +40,6 @@
           inherit system;
           overlays = [
             (import rust-overlay)
-            (final: prev: {
-              webhook-router = (prev.callPackage ./nix/webhook-router.nix { inherit self crane; }).webhook-router;
-            })
           ];
         };
 
