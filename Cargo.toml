@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-mlua = { version = "0.11.6", features = ["lua55", "serialize", "vendored"] }
+mlua = { version = "0.12.0", features = ["lua55", "serialize", "vendored"] }
 
 tokio = { version = "1.52.3", features = ["full"] }
 tracing-subscriber = "0.3.23"
