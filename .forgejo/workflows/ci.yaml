@@ -28,5 +28,5 @@ jobs:
           nix flake check . --max-jobs 32 -L --no-update-lock-file --accept-flake-config
 
       - name: Push to Attic
-        if: ${{ steps.attic.conclusion == 'success' }}
+        if: always()
         run: attic push main --ignore-upstream-cache-filter -j 64 $(ls -d /nix/store/*/)
