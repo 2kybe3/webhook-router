@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  pull_request:
 
 jobs:
   lint-and-build:
@@ -17,16 +18,25 @@ jobs:
 
       - name: Setup Attic
         id: attic
+        env:
+          ATTIC_TOKEN: ${{ secrets.ATTIC_KEY }}
+          ATTIC_ENDPOINT: ${{ vars.ATTIC_ENDPOINT }}
+          ATTIC_STORE: ${{ vars.ATTIC_STORE }}
         run: |
-          nix profile add "nixpkgs#attic-client"
-          attic login main https://attic.kybe.xyz/main ${{ secrets.ATTIC_KEY }}
-          attic use main
+          nix shell nixpkgs#attic-client -c sh -c '
+            attic login "$ATTIC_STORE" "$ATTIC_ENDPOINT" "$ATTIC_TOKEN"
+            attic use "$ATTIC_STORE"
+          '
 
       - name: Build & Checks
         run: |
-          nix build . --max-jobs 32 -L --no-update-lock-file --accept-flake-config
-          nix flake check . --max-jobs 32 -L --no-update-lock-file --accept-flake-config
+          nix flake check . -L --no-update-lock-file
 
       - name: Push to Attic
         if: always()
-        run: attic push main --ignore-upstream-cache-filter -j 64 $(ls -d /nix/store/*/)
+        env:
+          ATTIC_STORE: ${{ vars.ATTIC_STORE }}
+        run: |
+          nix shell nixpkgs#attic-client -c sh -c '
+            attic push "$ATTIC_STORE" --ignore-upstream-cache-filter -j 64 $(ls -d /nix/store/*/)
+          '
