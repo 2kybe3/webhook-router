@@ -64,6 +64,7 @@ testers.nixosTest {
 
   testScript = ''
     machine.wait_for_unit("webhook-router.service")
+    machine.wait_for_open_port(3000)
 
     result = machine.succeed("curl -s -X POST -H 'Content-Type: application/json' 'http://127.0.0.1:3000/webhook?input=test-input&token=supersecret123' -d '{\"priority\": \"high\", \"message\": \"This should be blocked\"}'")
     assert "webhook blocked by rule" in result, f"Expected block, got: {result}"
