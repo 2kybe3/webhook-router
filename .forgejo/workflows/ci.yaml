@@ -13,7 +13,7 @@ jobs:
       image: ghcr.io/catthehacker/ubuntu:act-latest@sha256:5d6a17640b25694988b9db5a4145537b9918e5430116b2cf90d84e837609b382
 
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: https://github.com/cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31
 
       - name: Setup Attic
