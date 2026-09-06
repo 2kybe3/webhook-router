@@ -83,7 +83,12 @@ async fn webhook_handler(
         );
     }
 
-    tracing::info!("got request: '{body}'");
+    tracing::info!(
+        "{:?}",
+        serde_json::from_str::<serde_json::Value>(&body)
+            .ok()
+            .map(|v| v.to_string())
+    );
 
     let targets = match state.config.get_target_webhooks(&query.input, &body) {
         Ok(targets) => targets,
