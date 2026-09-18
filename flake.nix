@@ -45,14 +45,11 @@
 
         treefmt-eval = treefmt-nix.lib.evalModule pkgs ./nix/treefmt.nix;
         webhook-router = pkgs.callPackage ./nix/webhook-router.nix { inherit self crane; };
-
-        nixosTest = pkgs.callPackage ./nix/nixos-test.nix { inherit nixosModule; };
       in
       {
         packages.default = webhook-router.webhook-router;
 
         checks = webhook-router.checks // {
-          inherit nixosTest;
           formatting = treefmt-eval.config.build.check self;
         };
 
