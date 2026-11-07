@@ -50,7 +50,7 @@ port = 3000
 
 [webhooks.discord]
 url = "https://discord.com/api/webhooks/..."
-formatter.script = '''
+formatter = '''
 function(data)
     return {
         content = "**" .. data.repository.name .. "** " .. data.action,
@@ -64,7 +64,7 @@ end
 
 [webhooks.slack]
 url = "https://hooks.slack.com/services/..."
-formatter.script = '''
+formatter = '''
 function(data)
     return {
         text = "New event: " .. data.action,
@@ -139,7 +139,7 @@ function(data)
 end
 ```
 
-### Formatter Scripts
+### Formatter
 
 Must return a Lua table that becomes the JSON body sent to the webhook.
 
