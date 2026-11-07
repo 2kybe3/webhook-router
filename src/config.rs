@@ -1,72 +1,76 @@
-use std::{
-    collections::HashMap,
-    fs,
-    path::{Path, PathBuf},
-    str::FromStr,
-};
+use std::{collections::HashMap, fs, path::Path};
 
 use anyhow::{Context, anyhow, bail};
-use mlua::prelude::*;
+use mlua::LuaSerdeExt;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
     pub ip: String,
     pub port: u16,
+
     pub webhooks: HashMap<String, Webhook>,
     pub inputs: HashMap<String, Input>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Input {
+    /// A list of rules which decide where to forward/clone the webhook too
     pub rules: Vec<Rule>,
     #[serde(skip)]
     pub token: Option<String>,
+    /// The file containing the token
     pub token_file: String,
+    /// The default webhook to use
     pub fallback_target: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Webhook {
+    /// The url of the webhook
     pub url: Option<String>,
+    /// A file containing the url of the webhook
+    /// Takes priority over `url`
     pub url_file: Option<String>,
-    pub formatter: WebhookFormatter,
+    /// A lua function that formats the webhook
+    pub formatter: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Rule {
+    /// The name of the rule
     pub name: String,
-    pub script: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct WebhookFormatter {
+    /// The lua function of the rule
     pub script: String,
 }
 
 #[derive(Debug, Clone)]
 pub enum RuleResult {
+    /// The request processor should stop execution
     Block,
+    /// The request processor should continue execution
     Continue,
+    /// The request processor should stop execution and send the webhook to the listed webhooks
     Redirect(Vec<String>),
+    /// The request processor should continue execution and send the webhook to the listed webhooks
     Clone(Vec<String>),
 }
 
 impl Config {
-    pub fn from_file(path: impl AsRef<Path>, validate: bool) -> anyhow::Result<Self> {
-        let content = fs::read_to_string(&path)
-            .context(format!("failed to read config file: {:?}", path.as_ref()))?;
-
-        Self::from_str(&content, validate)
+    pub fn from_file(path: impl AsRef<Path>, only_validate: bool) -> anyhow::Result<Self> {
+        Self::from_str(
+            &fs::read_to_string(&path)
+                .context(format!("failed read config file: {:?}", path.as_ref()))?,
+            only_validate,
+        )
     }
 
-    pub fn from_str(content: &str, validate: bool) -> anyhow::Result<Self> {
-        let mut config: Config =
-            toml::from_str(content).context("failed to parse config as TOML")?;
+    pub fn from_str(content: &str, only_validate: bool) -> anyhow::Result<Self> {
+        let mut config: Config = toml::from_str(content).context("failed to parse config")?;
 
         config.validate()?;
 
-        if !validate {
+        if !only_validate {
             config.init()?;
         }
 
@@ -74,18 +78,28 @@ impl Config {
     }
 
     pub fn init(&mut self) -> anyhow::Result<()> {
-        for input in &mut self.inputs {
-            tracing::info!("getting token for input '{}'", input.0);
-            let token = fs::read_to_string(PathBuf::from_str(&input.1.token_file)?)?;
-            input.1.token = Some(token.trim().to_string());
+        for (name, input) in self.inputs.iter_mut() {
+            input.token = Some(
+                fs::read_to_string(&input.token_file)
+                    .context(format!("could not read token_file for '{name}'"))?
+                    .trim()
+                    .to_string(),
+            );
         }
-        for webhook in self.webhooks.iter_mut() {
-            if let Some(url_file) = &webhook.1.url_file {
-                tracing::info!("getting url for input '{}'", webhook.0);
-                let url = fs::read_to_string(PathBuf::from_str(url_file)?)?;
-                webhook.1.url = Some(url.trim().to_string());
-            }
+
+        for (name, webhook) in self.webhooks.iter_mut() {
+            let Some(url_file) = &webhook.url_file else {
+                continue;
+            };
+
+            webhook.url = Some(
+                fs::read_to_string(url_file)
+                    .context(format!("could not read url_file for '{name}'"))?
+                    .trim()
+                    .to_string(),
+            );
         }
+
         Ok(())
     }
 
@@ -97,74 +111,66 @@ impl Config {
             bail!("at least one input must be configured");
         }
 
-        let webhook_names: Vec<_> = self.webhooks.iter().map(|w| w.0).collect();
-        if webhook_names.len() != self.webhooks.iter().len() {
-            bail!("webhooks names must be unique");
-        }
-
-        for (input_name, input) in &self.inputs {
+        for (name, input) in &self.inputs {
+            // Make sure all rules are valid lua
             for rule in &input.rules {
-                let lua = Self::create_lua_context();
-                lua.load(&rule.script).eval::<LuaFunction>().map_err(|e| {
-                    anyhow!(
-                        "invalid Lua script.\nrule: '{}'\nerror '{}'\nscript:\n```\n{}\n```\n",
-                        rule.name,
-                        e,
-                        rule.script
-                    )
-                })?;
+                Self::create_lua_context()
+                    .load(&rule.script)
+                    .eval::<mlua::Function>()
+                    .context(format!("input: '{}'", name))
+                    .context(format!("rule: '{}'", rule.name))
+                    .context(format!("script: {}", rule.script))?;
             }
 
-            if let Some(target) = &input.fallback_target
-                && !self.webhooks.iter().any(|w| w.0 == target)
+            // Make sure the fallback references a valid webhook name
+            if let Some(fallback_target) = &input.fallback_target
+                && !self
+                    .webhooks
+                    .iter()
+                    .any(|(name, _webhook)| name == fallback_target)
             {
                 bail!(
                     "input '{}' references unknown webhook '{}'",
-                    input_name,
-                    target
+                    name,
+                    fallback_target
                 );
             }
         }
 
-        for webhook in &self.webhooks {
-            let lua = Self::create_lua_context();
-            lua.load(&webhook.1.formatter.script).eval::<LuaFunction>().map_err(|e| {
-                    anyhow!(
-                        "invalid Lua script in webhook formatter '{}'\nerror: {}\nscript:\n```\n{}\n```",
-                        webhook.0,
-                        e,
-                        webhook.1.formatter.script
-                    )
-                })?;
+        // Make sure all webhook formatters are valid lua
+        for (name, webhook) in &self.webhooks {
+            Self::create_lua_context()
+                .load(&webhook.formatter)
+                .eval::<mlua::Function>()
+                .context(format!("webhook: {name}"))
+                .context(format!("script: {}", webhook.formatter))?;
         }
 
         Ok(())
     }
 
-    fn create_lua_context() -> Lua {
-        Lua::new()
+    fn create_lua_context() -> mlua::Lua {
+        mlua::Lua::new()
     }
 
     pub fn evaluate_rule(&self, rule: &Rule, data: &str) -> anyhow::Result<Option<RuleResult>> {
         let lua = Self::create_lua_context();
 
-        let json: serde_json::Value =
-            serde_json::from_str(data).context("failed to parse input as JSON")?;
-        let data_table = lua
-            .to_value(&json)
-            .map_err(|e| anyhow!("{e:?}"))
+        let lua_data = lua
+            .to_value(
+                &serde_json::from_str::<serde_json::Value>(data)
+                    .context("failed to parse input")?,
+            )
             .context("failed to convert JSON to Lua")?;
 
         let function = lua
             .load(&rule.script)
-            .eval::<LuaFunction>()
-            .map_err(|e| anyhow!("{e}"))
-            .context(format!("failed to compile rule '{}' script", rule.name))?;
+            .eval::<mlua::Function>()
+            .context(format!("rule: {}", rule.name))?;
 
         let result = function
-            .call::<mlua::MultiValue>(data_table)
-            .map_err(|e| anyhow!("{e}"))
-            .context(format!("error executing rule '{}' script", rule.name))?;
+            .call::<mlua::MultiValue>(lua_data)
+            .context(format!("error executing rules '{}' script", rule.name))?;
 
         if result.is_empty() {
             return Ok(None);
@@ -175,10 +181,14 @@ impl Config {
             .ok_or_else(|| anyhow!("rule script must return an action"))?;
 
         let action_str = match action {
-            LuaValue::String(s) => s.to_str().map_err(|e| anyhow!("{e}"))?.to_string(),
-            LuaValue::Nil => "continue".to_string(),
+            mlua::Value::String(s) => s.to_str()?.to_string(),
+            mlua::Value::Nil => return Ok(Some(RuleResult::Continue)),
             _ => bail!("rule action must be a string"),
         };
+
+        if result.get(2).is_some() {
+            bail!("A 3. argument got returned. (you probably wanted to return a list)")
+        }
 
         match action_str.as_str() {
             "block" | "drop" => Ok(Some(RuleResult::Block)),
@@ -187,32 +197,33 @@ impl Config {
                 let targets = result
                     .get(1)
                     .ok_or_else(|| anyhow!("redirect action requires targets"))?;
-                let targets_vec = self.lua_value_to_string_vec(targets)?;
-                Ok(Some(RuleResult::Redirect(targets_vec)))
+                Ok(Some(RuleResult::Redirect(
+                    self.lua_value_to_string_vec(targets)?,
+                )))
             }
             "clone" => {
                 let targets = result
                     .get(1)
                     .ok_or_else(|| anyhow!("clone action requires targets"))?;
-                let targets_vec = self.lua_value_to_string_vec(targets)?;
-                Ok(Some(RuleResult::Clone(targets_vec)))
+                Ok(Some(RuleResult::Clone(
+                    self.lua_value_to_string_vec(targets)?,
+                )))
             }
             _ => bail!("invalid rule action: {}", action_str),
         }
     }
 
-    fn lua_value_to_string_vec(&self, value: &LuaValue) -> anyhow::Result<Vec<String>> {
+    fn lua_value_to_string_vec(&self, value: &mlua::Value) -> anyhow::Result<Vec<String>> {
         match value {
-            LuaValue::String(s) => Ok(vec![s.to_str().map_err(|e| anyhow!("{e}"))?.to_string()]),
-            LuaValue::Table(t) => {
+            mlua::Value::String(s) => Ok(vec![s.to_str()?.to_string()]),
+            mlua::Value::Table(table) => {
                 let mut results = Vec::new();
-                for i in 1..=t.raw_len() {
-                    let val = t.get::<LuaValue>(i).map_err(|e| anyhow!("{e}"))?;
+
+                for i in 1..=table.raw_len() {
+                    let val = table.get::<mlua::Value>(i)?;
                     match val {
-                        LuaValue::String(s) => {
-                            results.push(s.to_str().map_err(|e| anyhow!("{e}"))?.to_string())
-                        }
-                        _ => bail!("target table must contain only strings"),
+                        mlua::Value::String(s) => results.push(s.to_str()?.to_string()),
+                        _ => bail!("targets table must contain only strings"),
                     }
                 }
 
@@ -273,28 +284,20 @@ impl Config {
         let lua = Self::create_lua_context();
 
         let json: serde_json::Value =
-            serde_json::from_str(data).context("failed to parse input as JSON")?;
-        let data_table = lua.to_value(&json).map_err(|e| anyhow!("{e:?}"))?;
+            serde_json::from_str(data).context("failed to parse input")?;
+
+        let data_table = lua.to_value(&json)?;
 
         let function = lua
-            .load(&webhook.1.formatter.script)
-            .eval::<LuaFunction>()
-            .map_err(|e| {
-                anyhow!(
-                    "failed to compile formatter '{}' script with error '{e}'",
-                    webhook.0
-                )
-            })?;
+            .load(&webhook.1.formatter)
+            .eval::<mlua::Function>()
+            .context(format!("webhook: {}", webhook.0))?;
 
-        let result = function.call::<LuaValue>(data_table).map_err(|e| {
-            anyhow!(
-                "error executing formatter '{}' script with error '{e}'",
-                webhook.0
-            )
-        })?;
+        let result = function
+            .call::<mlua::Value>(data_table)
+            .context(format!("webhook: {}", webhook.0))?;
 
-        lua.from_value::<serde_json::Value>(result)
-            .map_err(|e| anyhow!("{e}"))
+        Ok(lua.from_value::<serde_json::Value>(result)?)
     }
 }
 
@@ -306,19 +309,15 @@ mod tests {
         Webhook {
             url: Some(format!("https://{name}.example.come")),
             url_file: None,
-            formatter: WebhookFormatter {
-                script: r#"function(data) return { body = "test" end}"#.to_string(),
-            },
+            formatter: r#"function(data) return { body = "test" end}"#.to_string(),
         }
     }
 
-    fn test_webhook_with_formatter(name: &str, formatter: &str) -> Webhook {
+    fn test_webhook_with_formatter(name: &str, formatter: impl Into<String>) -> Webhook {
         Webhook {
             url: Some(format!("https://{name}.example.come")),
             url_file: None,
-            formatter: WebhookFormatter {
-                script: formatter.to_string(),
-            },
+            formatter: formatter.into(),
         }
     }
 

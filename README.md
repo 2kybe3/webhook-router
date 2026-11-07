@@ -1,36 +1,10 @@
 # webhook-router
 
-A lightweight, programmable webhook router written in Rust. Route, filter, transform, and fan-out incoming webhooks using **Lua scripts**.
-
----
-
-## Features
-
-- **Rule-based routing** using Lua scripts (`block`, `redirect`, `continue`, `clone`)
-- **Payload transformation** per webhook using Lua formatters
-- **Token-based authentication** per input
-- **TOML configuration** with validation
-- **Detailed response** with per-webhook delivery status
+A lightweight, programmable webhook router.
 
 ---
 
 ## Installation
-
-### From Source
-
-```bash
-git clone <your-repo>
-cd webhook-router
-cargo build --release
-```
-
-The binary will be available at `target/release/webhook-router`.
-
-### Also From Source
-
-```bash
-cargo install --git https://git.kybe.xyz/2kybe3/webhook-router
-```
 
 ### Nix
 
@@ -149,7 +123,7 @@ Rules must return one of:
 - `"block"` → stop and return 200 (no delivery)
 - `"continue"` → continue to next rule
 - `"redirect", "webhook_name"` → deliver **only** to this webhook
-- `"redirect", {"webhook_a", "webhook_b"}` → deliver only to these
+- `"redirect", {"webhook_a", "webhook_b"}` → deliver only to these webhooks
 - `"clone", "webhook_name"` or `"clone", {"webhook_a", "webhook_b"}` → deliver to these + continue rules
 
 **Example:**

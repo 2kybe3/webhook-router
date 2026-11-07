@@ -1,6 +1,6 @@
 mod config;
 
-use anyhow::anyhow;
+use anyhow::Context;
 use axum::{
     Json, Router,
     extract::{Query, State},
@@ -17,7 +17,7 @@ use crate::config::Config;
 #[command(version)]
 struct Cli {
     #[arg(short, long, value_name = "FILE")]
-    config: Option<PathBuf>,
+    config: PathBuf,
 
     #[arg(long)]
     validate: bool,
@@ -63,7 +63,7 @@ async fn webhook_handler(
                 StatusCode::NOT_FOUND,
                 Json(WebhookResponse {
                     success: false,
-                    message: format!("unknown input '{}'", query.input),
+                    message: "unknown input".into(),
                     targets: None,
                     sent: None,
                 }),
@@ -110,8 +110,8 @@ async fn webhook_handler(
             StatusCode::OK,
             Json(WebhookResponse {
                 success: true,
-                message: "webhook blocked by rule".to_string(),
-                targets: Some(vec![]),
+                message: "webhook blocked by rule".into(),
+                targets: None,
                 sent: None,
             }),
         );
@@ -120,7 +120,12 @@ async fn webhook_handler(
     let mut send_results = Vec::new();
 
     for target_name in &targets {
-        let webhook = match state.config.webhooks.iter().find(|w| w.0 == target_name) {
+        let webhook = match state
+            .config
+            .webhooks
+            .iter()
+            .find(|(name, _webhook)| *name == target_name)
+        {
             Some(webhook) => webhook,
             None => {
                 send_results.push(WebhookSendResult {
@@ -136,7 +141,7 @@ async fn webhook_handler(
         let formatted_body = match state.config.format_webhook_body(webhook, &body) {
             Ok(body) => body,
             Err(e) => {
-                tracing::error!("failed to format webhook body for '{}': {}", webhook.0, e);
+                tracing::warn!("{}", e.context(format!("webhook: {}", webhook.0)));
                 send_results.push(WebhookSendResult {
                     webhook: target_name.clone(),
                     status: 0,
@@ -147,7 +152,7 @@ async fn webhook_handler(
             }
         };
 
-        match send_webhook(&state.http_client, webhook.1, formatted_body).await {
+        match send_webhook(&state.http_client, webhook, formatted_body).await {
             Ok(status) => {
                 let success = status.is_success();
                 send_results.push(WebhookSendResult {
@@ -192,49 +197,47 @@ async fn webhook_handler(
 
 async fn send_webhook(
     client: &reqwest::Client,
-    webhook: &config::Webhook,
+    webhook: (&String, &config::Webhook),
     body: serde_json::Value,
 ) -> anyhow::Result<reqwest::StatusCode> {
-    let response = client
-        .post(webhook.url.as_ref().unwrap())
+    Ok(client
+        .post(
+            webhook
+                .1
+                .url
+                .as_ref()
+                .context(format!("webhook '{}' does not have a url set", webhook.0))?,
+        )
         .header("Content-Type", "application/json")
-        .header("User-Agent", "webhook-router (by 2kybe3)")
+        .header("User-Agent", "webhook-router (git.kybe.xyz)")
         .json(&body)
         .timeout(Duration::from_secs(10))
         .send()
-        .await?;
-
-    Ok(response.status())
+        .await?
+        .status())
 }
 
 #[tokio::main]
 pub async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-
     tracing_subscriber::fmt::init();
 
-    let config = cli.config.ok_or_else(|| anyhow!("no config set"))?;
-
-    let config = Config::from_file(config, cli.validate)?;
+    let config = Config::from_file(cli.config, cli.validate)?;
 
     if cli.validate {
         return Ok(());
     }
 
-    let ip_port = (config.ip.clone(), config.port);
-
-    let config = Arc::new(config);
-
-    let state = AppState {
-        config,
-        http_client: reqwest::Client::new(),
-    };
+    let bind = (config.ip.clone(), config.port);
 
     let app = Router::new()
         .route("/webhook", post(webhook_handler))
-        .with_state(state);
+        .with_state(AppState {
+            config: Arc::new(config),
+            http_client: reqwest::Client::new(),
+        });
 
-    let listener = tokio::net::TcpListener::bind(ip_port).await?;
+    let listener = tokio::net::TcpListener::bind(bind).await?;
     tracing::info!("listening on {}", listener.local_addr()?);
 
     axum::serve(listener, app).await?;
