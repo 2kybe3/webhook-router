@@ -104,13 +104,6 @@ impl Config {
     }
 
     pub fn validate(&self) -> anyhow::Result<()> {
-        if self.webhooks.is_empty() {
-            bail!("at least one webhook must be configured");
-        }
-        if self.inputs.is_empty() {
-            bail!("at least one input must be configured");
-        }
-
         for (name, input) in &self.inputs {
             // Make sure all rules are valid lua
             for rule in &input.rules {
@@ -309,7 +302,7 @@ mod tests {
         Webhook {
             url: Some(format!("https://{name}.example.come")),
             url_file: None,
-            formatter: r#"function(data) return { body = "test" end}"#.to_string(),
+            formatter: r#"function(data) return { body = "test" } end"#.to_string(),
         }
     }
 
@@ -335,7 +328,7 @@ mod tests {
                 map.insert(
                     "input".to_string(),
                     Input {
-                        fallback_target: Some("webhook_a".to_string()),
+                        fallback_target: Some("a".to_string()),
                         token: None,
                         token_file: "".to_string(),
                         rules: vec![Rule {
@@ -354,6 +347,8 @@ mod tests {
                 map
             },
         };
+
+        config.validate()?;
 
         let json = r#"{"type": "alert", "priority": "high"}"#;
         let result = config.get_target_webhooks("input", json)?;
@@ -375,7 +370,7 @@ mod tests {
                 map.insert(
                     "input".to_string(),
                     Input {
-                        fallback_target: Some("webhook_a".to_string()),
+                        fallback_target: Some("a".to_string()),
                         token: None,
                         token_file: "".to_string(),
                         rules: vec![Rule {
@@ -394,6 +389,8 @@ mod tests {
                 map
             },
         };
+
+        config.validate()?;
 
         let json = r#"{"type": "redirect_me"}"#;
         let result = config.get_target_webhooks("input", json)?;
@@ -415,7 +412,7 @@ mod tests {
                 map.insert(
                     "input".to_string(),
                     Input {
-                        fallback_target: Some("webhook_a".to_string()),
+                        fallback_target: Some("a".to_string()),
                         token: None,
                         token_file: "".to_string(),
                         rules: vec![Rule {
@@ -434,6 +431,8 @@ mod tests {
                 map
             },
         };
+
+        config.validate()?;
 
         let json = r#"{"clone_me": "true", "message": "hello"}"#;
         let result = config.get_target_webhooks("input", json)?;
@@ -459,12 +458,15 @@ mod tests {
                 "#,
             ),
         );
+
         let config = Config {
             ip: "0.0.0.0".to_string(),
             port: 3000,
             webhooks,
             inputs: HashMap::new(),
         };
+
+        config.validate()?;
 
         let json = r#"{"user": {"name": "alice"}, "action": {"type": "issue"}}"#;
         let result = config.format_webhook_body(config.webhooks.iter().next().unwrap(), json)?;
@@ -495,7 +497,7 @@ mod tests {
                 map.insert(
                     "input".to_string(),
                     Input {
-                        fallback_target: Some("webhook_a".to_string()),
+                        fallback_target: Some("a".to_string()),
                         token: None,
                         token_file: "".to_string(),
                         rules: vec![
@@ -525,6 +527,8 @@ mod tests {
                 map
             },
         };
+
+        config.validate()?;
 
         let json = r#"{"type": "redirect_me", "other": "something"}"#;
         let result = config.get_target_webhooks("input", json)?;
