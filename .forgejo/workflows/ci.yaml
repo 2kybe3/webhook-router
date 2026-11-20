@@ -16,18 +16,21 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: https://github.com/cachix/install-nix-action@bb0495a1086c46893eee56f32fd192dfe4a15bb9 # v32.0.0
 
+
       - name: Setup Attic
-        id: attic
         env:
           ATTIC_TOKEN: ${{ secrets.ATTIC_KEY }}
           ATTIC_ENDPOINT: ${{ vars.ATTIC_ENDPOINT }}
           ATTIC_STORE: ${{ vars.ATTIC_STORE }}
+        id: attic
         run: |
-          nix shell nixpkgs#attic-client -c sh -c '
-            attic login "$ATTIC_STORE" "$ATTIC_ENDPOINT" "$ATTIC_TOKEN"
-            attic use "$ATTIC_STORE"
-          '
-
+          nix shell nixpkgs#attic-client \
+            --option "extra-substituters" "$ATTIC_ENDPOINT" \
+            --option "extra-trusted-public-keys" "$ATTIC_KEY" \
+            --command sh -c '
+              attic login "$ATTIC_STORE" "$ATTIC_ENDPOINT" "$ATTIC_TOKEN" && attic use "$ATTIC_STORE"
+            '
+      
       - name: Build & Checks
         run: |
           nix flake check . -L --no-update-lock-file
@@ -37,6 +40,9 @@ jobs:
         env:
           ATTIC_STORE: ${{ vars.ATTIC_STORE }}
         run: |
-          nix shell nixpkgs#attic-client -c sh -c '
-            attic push "$ATTIC_STORE" --ignore-upstream-cache-filter -j 64 $(ls -d /nix/store/*/)
-          '
+          nix shell nixpkgs#attic-client \
+            --option "extra-substituters" "$ATTIC_ENDPOINT" \
+            --option "extra-trusted-public-keys" "$ATTIC_KEY" \
+            --command sh -c '
+              attic push "$ATTIC_STORE" --ignore-upstream-cache-filter -j 64 $(ls -d /nix/store/*/)
+            '
