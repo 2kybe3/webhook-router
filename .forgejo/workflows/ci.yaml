@@ -10,7 +10,7 @@ jobs:
   lint-and-build:
     runs-on: self-hosted
     container:
-      image: ghcr.io/catthehacker/ubuntu:act-latest@sha256:a69bc68d691e9e9afd294dbb9ea7a71e38207c2f0a7b689b5dc6a4cacf06f5e6
+      image: ghcr.io/catthehacker/ubuntu:act-latest@sha256:beea02d9454a21c06de0104bb1f8c1542b88dd88f33022f9d36b52b48e022bd7
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
